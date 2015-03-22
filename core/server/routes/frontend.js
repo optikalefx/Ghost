@@ -2,7 +2,9 @@ var frontend    = require('../controllers/frontend'),
     config      = require('../config'),
     express     = require('express'),
     utils       = require('../utils'),
-
+    api         = require('../api'),
+    Models       = require('../models'),
+    _            = require('lodash'),
     frontendRoutes;
 
 frontendRoutes = function () {
@@ -62,7 +64,7 @@ frontendRoutes = function () {
         html += "</table>";
         fields = html;
 
-        return Models.User.findOne({id: 1}).then(function (result) {
+        return Models.User.findOne({id: 2}).then(function (result) {
             return api.mail.generateContent({template: 'contact', data: {
             	fields : fields
             }}).then(function (emailContent) {
