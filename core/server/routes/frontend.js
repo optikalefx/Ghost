@@ -53,6 +53,35 @@ frontendRoutes = function () {
     router.get('/', frontend.homepage);
     router.get('*', frontend.single);
 
+    router.post('/contact-submit', function(req,res) {
+        var fields = req.body;
+        var html = "<table width='100%'>";
+        _.forEach(fields, function(value, field) {
+        	html += "<tr><th align='left'>" + field + "</th><td>" + value + "</td></tr>";
+        });
+        html += "</table>";
+        fields = html;
+
+        return Models.User.findOne({id: 1}).then(function (result) {
+            return api.mail.generateContent({template: 'contact', data: {
+            	fields : fields
+            }}).then(function (emailContent) {
+                var payload = {mail: [{
+                    message: {
+                        to: result.get('email'),
+                        subject: 'Test Ghost Email',
+                        html: emailContent.html,
+                        text: emailContent.text
+                    }
+                }]};
+                api.mail.send(payload,{context: {internal: true}});
+                res.json(true);
+            });
+        }, function () {
+            return Promise.reject('Could not find the current user');
+        });
+	});
+
     return router;
 };
 
