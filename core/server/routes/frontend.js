@@ -71,7 +71,7 @@ frontendRoutes = function () {
                 var payload = {mail: [{
                     message: {
                         to: result.get('email'),
-                        subject: 'Test Ghost Email',
+                        subject: 'New contact from Comedtech',
                         html: emailContent.html,
                         text: emailContent.text
                     }
