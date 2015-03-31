@@ -64,7 +64,7 @@ frontendRoutes = function () {
         html += "</table>";
         fields = html;
 
-        return Models.User.findOne({id: 2}).then(function (result) {
+        return Models.User.findOne({slug: "contact"}).then(function (result) {
             return api.mail.generateContent({template: 'contact', data: {
             	fields : fields
             }}).then(function (emailContent) {
