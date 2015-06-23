@@ -290,137 +290,161 @@ frontendControllers = {
             params,
             usingStaticPermalink = false;
 
-        api.settings.read('permalinks').then(function (response) {
-            var permalink = response.settings[0],
-                editFormat,
-                postLookup,
-                match;
 
-            editFormat = permalink.value[permalink.value.length - 1] === '/' ? ':edit?' : '/:edit?';
+         // static slugs we want in the UI
+        var staticSlugs = [
+            "home-left",
+            "home-right",
+            "quote-right",
+            "quote-left"
+        ];
 
-            // Convert saved permalink into a path-match function
-            permalink = routeMatch(permalink.value + editFormat);
-            match = permalink(path);
+        // map these to promises
+        var staticPromises = staticSlugs.map(function(item) {
+            return api.posts.read({ slug: item, include: 'author,tags,fields' });
+        });
 
-            // Check if the path matches the permalink structure.
-            //
-            // If there are no matches found we then
-            // need to verify it's not a static post,
-            // and test against that permalink structure.
-            if (match === false) {
-                match = staticPostPermalink(path);
-                // If there are still no matches then return.
+        // when all promises are resolved
+        Promise.all(staticPromises).then(function(allSlugs) {
+
+            // map to res locals
+            allSlugs.forEach(function(item) {
+                res.locals[item.posts[0].slug] = item.posts[0];
+            });
+
+
+            api.settings.read('permalinks').then(function (response) {
+                var permalink = response.settings[0],
+                    editFormat,
+                    postLookup,
+                    match;
+
+                editFormat = permalink.value[permalink.value.length - 1] === '/' ? ':edit?' : '/:edit?';
+
+                // Convert saved permalink into a path-match function
+                permalink = routeMatch(permalink.value + editFormat);
+                match = permalink(path);
+
+                // Check if the path matches the permalink structure.
+                //
+                // If there are no matches found we then
+                // need to verify it's not a static post,
+                // and test against that permalink structure.
                 if (match === false) {
-                    // Reject promise chain with type 'NotFound'
-                    return Promise.reject(new errors.NotFoundError());
+                    match = staticPostPermalink(path);
+                    // If there are still no matches then return.
+                    if (match === false) {
+                        // Reject promise chain with type 'NotFound'
+                        return Promise.reject(new errors.NotFoundError());
+                    }
+
+                    usingStaticPermalink = true;
                 }
 
-                usingStaticPermalink = true;
-            }
+                params = match;
 
-            params = match;
+                // Sanitize params we're going to use to lookup the post.
+                postLookup = _.pick(params, 'slug', 'id');
+                // Add author, tag and fields
+                postLookup.include = 'author,tags,fields';
 
-            // Sanitize params we're going to use to lookup the post.
-            postLookup = _.pick(params, 'slug', 'id');
-            // Add author, tag and fields
-            postLookup.include = 'author,tags,fields';
+                // Query database to find post
+                return api.posts.read(postLookup);
+            }).then(function (result) {
+                var post = result.posts[0],
+                    slugDate = [],
+                    slugFormat = [];
 
-            // Query database to find post
-            return api.posts.read(postLookup);
-        }).then(function (result) {
-            var post = result.posts[0],
-                slugDate = [],
-                slugFormat = [];
-
-            if (!post) {
-                return next();
-            }
-
-            function render() {
-                // If we're ready to render the page but the last param is 'edit' then we'll send you to the edit page.
-                if (params.edit) {
-                    params.edit = params.edit.toLowerCase();
-                }
-                if (params.edit === 'edit') {
-                    return res.redirect(config.paths.subdir + '/ghost/editor/' + post.id + '/');
-                } else if (params.edit !== undefined) {
-                    // reject with type: 'NotFound'
-                    return Promise.reject(new errors.NotFoundError());
+                if (!post) {
+                    return next();
                 }
 
-                setReqCtx(req, post);
+                function render() {
+                    // If we're ready to render the page but the last param is 'edit' then we'll send you to the edit page.
+                    if (params.edit) {
+                        params.edit = params.edit.toLowerCase();
+                    }
+                    if (params.edit === 'edit') {
+                        return res.redirect(config.paths.subdir + '/ghost/editor/' + post.id + '/');
+                    } else if (params.edit !== undefined) {
+                        // reject with type: 'NotFound'
+                        return Promise.reject(new errors.NotFoundError());
+                    }
 
-                filters.doFilter('prePostsRender', post).then(function (post) {
-                    getActiveThemePaths().then(function (paths) {
-                        var view = template.getThemeViewForPost(paths, post),
-                            response = formatResponse(post);
+                    setReqCtx(req, post);
 
-                        setResponseContext(req, res, response);
+                    filters.doFilter('prePostsRender', post).then(function (post) {
+                        getActiveThemePaths().then(function (paths) {
+                            var view = template.getThemeViewForPost(paths, post),
+                                response = formatResponse(post);
 
-                        res.render(view, response);
+                            setResponseContext(req, res, response);
+
+                            res.render(view, response);
+                        });
                     });
-                });
-            }
-
-            // If we've checked the path with the static permalink structure
-            // then the post must be a static post.
-            // If it is not then we must return.
-            if (usingStaticPermalink) {
-                if (post.page) {
-                    return render();
                 }
 
-                return next();
-            }
+                // If we've checked the path with the static permalink structure
+                // then the post must be a static post.
+                // If it is not then we must return.
+                if (usingStaticPermalink) {
+                    if (post.page) {
+                        return render();
+                    }
 
-            // If there is an author parameter in the slug, check that the
-            // post is actually written by the given author\
-            if (params.author) {
-                if (post.author.slug === params.author) {
-                    return render();
-                }
-                return next();
-            }
-
-            // If there is any date based parameter in the slug
-            // we will check it against the post published date
-            // to verify it's correct.
-            if (params.year || params.month || params.day) {
-                if (params.year) {
-                    slugDate.push(params.year);
-                    slugFormat.push('YYYY');
+                    return next();
                 }
 
-                if (params.month) {
-                    slugDate.push(params.month);
-                    slugFormat.push('MM');
+                // If there is an author parameter in the slug, check that the
+                // post is actually written by the given author\
+                if (params.author) {
+                    if (post.author.slug === params.author) {
+                        return render();
+                    }
+                    return next();
                 }
 
-                if (params.day) {
-                    slugDate.push(params.day);
-                    slugFormat.push('DD');
+                // If there is any date based parameter in the slug
+                // we will check it against the post published date
+                // to verify it's correct.
+                if (params.year || params.month || params.day) {
+                    if (params.year) {
+                        slugDate.push(params.year);
+                        slugFormat.push('YYYY');
+                    }
+
+                    if (params.month) {
+                        slugDate.push(params.month);
+                        slugFormat.push('MM');
+                    }
+
+                    if (params.day) {
+                        slugDate.push(params.day);
+                        slugFormat.push('DD');
+                    }
+
+                    slugDate = slugDate.join('/');
+                    slugFormat = slugFormat.join('/');
+
+                    if (slugDate === moment(post.published_at).format(slugFormat)) {
+                        return render();
+                    }
+
+                    return next();
                 }
 
-                slugDate = slugDate.join('/');
-                slugFormat = slugFormat.join('/');
-
-                if (slugDate === moment(post.published_at).format(slugFormat)) {
-                    return render();
+                return render();
+            }).catch(function (err) {
+                // If we've thrown an error message
+                // of type: 'NotFound' then we found
+                // no path match.
+                if (err.type === 'NotFoundError') {
+                    return next();
                 }
 
-                return next();
-            }
-
-            return render();
-        }).catch(function (err) {
-            // If we've thrown an error message
-            // of type: 'NotFound' then we found
-            // no path match.
-            if (err.type === 'NotFoundError') {
-                return next();
-            }
-
-            return handleError(next)(err);
+                return handleError(next)(err);
+            });
         });
     },
     rss: function (req, res, next) {
