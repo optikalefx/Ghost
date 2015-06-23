@@ -52,7 +52,10 @@ frontendRoutes = function () {
 
     // Default
     router.get('/page/:page/', frontend.homepage);
-    router.get('/', frontend.homepage);
+    router.get('/', function(req,res) {
+        res.redirect("/home");
+    });
+    router.get('/blog', frontend.homepage);
     router.get('*', frontend.single);
 
     router.post('/contact-submit', function(req,res) {
