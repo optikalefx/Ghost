@@ -445,6 +445,8 @@ frontendControllers = {
 
                 return handleError(next)(err);
             });
+        }, function(error) {
+            console.log("static not found", error);
         });
     },
     rss: function (req, res, next) {
