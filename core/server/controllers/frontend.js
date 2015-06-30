@@ -304,6 +304,8 @@ frontendControllers = {
             return api.posts.read({ slug: item, include: 'author,tags,fields' });
         });
 
+        staticPromises = [];
+
         // when all promises are resolved
         Promise.all(staticPromises).then(function(allSlugs) {
 
